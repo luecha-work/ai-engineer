@@ -9,6 +9,9 @@ from app.vectorstore import PGVectorIngestor, PGVectorRetriever
 
 def ingest_documents(tenant_id: str, documents: List[DocumentIn]) -> List[int]:
     db = SessionLocal()
+    
+    print(f"Ingesting {len(documents)} documents for tenant {tenant_id}")
+    
     try:
         ingestor = PGVectorIngestor(db=db)
         doc_ids: List[int] = []
