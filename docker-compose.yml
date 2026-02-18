@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ai_assistant
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  ollama:
+    image: ollama/ollama:0.1.48
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    command:
+      [
+        "/bin/sh",
+        "-lc",
+        "ollama serve & sleep 2 && ollama pull nomic-embed-text && ollama pull llama3:8b && wait",
+      ]
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@postgres:5432/ai_assistant
+      REDIS_URL: redis://redis:6379/0
+      EMBEDDING_DIM: 768
+      CACHE_TTL_SECONDS: 300
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: llama3:8b
+      OLLAMA_EMBED_MODEL: nomic-embed-text
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+      - ollama
+
+volumes:
+  pgdata:
+  ollama_data:
