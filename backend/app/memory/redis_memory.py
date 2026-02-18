@@ -1,18 +1,80 @@
-import json
+from typing import Optional
 import redis
-
-from app.config.settings import settings
-
-
-redis_client = redis.Redis.from_url(settings.redis_url, decode_responses=True)
+from langchain_redis import RedisChatMessageHistory
+from langchain.memory import ConversationBufferWindowMemory
+from app.config.settings import REDIS_URL
 
 
-def cache_get(key: str):
-    value = redis_client.get(key)
-    if value is None:
-        return None
-    return json.loads(value)
+def get_redis_memory(
+    session_id: str,
+    k: int = 5,
+    key_prefix: str = "chat_history",
+    ttl: int = 3600,
+) -> ConversationBufferWindowMemory:
+    if not session_id:
+        raise ValueError("session_id is required for memory persistence")
+
+    redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+
+    chat_history = RedisChatMessageHistory(
+        session_id=session_id,
+        redis_client=redis_client,
+        key_prefix=key_prefix,
+        ttl=ttl,
+    )
+
+    return ConversationBufferWindowMemory(
+        memory_key="chat_history",
+        return_messages=True,
+        k=k,
+        chat_memory=chat_history,
+    )
 
 
-def cache_set(key: str, value: dict, ttl: int):
-    redis_client.setex(key, ttl, json.dumps(value))
+def clear_redis_memory(
+    session_id: str,
+    key_prefix: str = "chat_history",
+):
+    if not session_id:
+        raise ValueError("session_id is required for memory persistence")
+
+    key = f"{key_prefix}{session_id}"
+    redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+    redis_client.delete(key)
+
+
+def create_redis_memory(
+    session_id: str,
+    k: int = 5,
+    limit: Optional[int] = None,
+    key_prefix: str = "chat_history:",
+    memory_key: str = "history_store",
+    ttl: Optional[int] = None,
+) -> ConversationBufferWindowMemory:
+    """
+    Create a ConversationBufferWindowMemory backed by Redis.
+    Optionally trim Redis if `limit` is set.
+    """
+    if not session_id:
+        raise ValueError("session_id is required for memory persistence")
+
+    redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+
+    """key_prefix must begin with chat_history"""
+    chat_history = RedisChatMessageHistory(
+        session_id=session_id,
+        redis_client=redis_client,
+        key_prefix=key_prefix,
+        ttl=ttl,
+    )
+
+    # if limit is not None:
+    #     key = f"{key_prefix}{session_id}"
+    #     redis_client.ltrim(key, -limit * 2, -1)
+
+    return ConversationBufferWindowMemory(
+        memory_key=memory_key,
+        return_messages=True,
+        k=k,
+        chat_memory=chat_history,
+    )
