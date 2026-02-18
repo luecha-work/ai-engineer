@@ -1,33 +1,41 @@
-import os
-from dotenv import load_dotenv
-from langchain_google_vertexai import VertexAIEmbeddings
-from langchain_postgres import PGVector
+from typing import Dict, List
+from langchain_community.embeddings import OllamaEmbeddings
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-from app.config.settings import GCP_PROJECT_ID, PGVECTOR_CONNECTION_STRING
+from app.config.settings import settings
 from app.vectorstore.base_vector_retriever import BaseVectorRetriever
 
 
 class PGVectorRetriever(BaseVectorRetriever):
+    def __init__(self, db: Session, k: int = 5):
+        self.db = db
+        self.embeddings = OllamaEmbeddings(
+            model=settings.ollama_embed_model,
+            base_url=settings.ollama_url,
+        )
+        super().__init__(k=k)
+
     def _initialize(self):
-        self._gcp_project = GCP_PROJECT_ID
-        self._connection_string = PGVECTOR_CONNECTION_STRING
-        self._embedding_model = "text-embedding-004"
+        return None
 
-        if not all([self._gcp_project, self._connection_string]):
-            raise ValueError(
-                "Please set GCP_PROJECT_ID and PGVECTOR_CONNECTION_STRING."
+    def search(self, tenant_id: str, query: str) -> List[Dict]:
+        query_vec = self.embeddings.embed_query(query)
+        stmt = text(
+            """
+            SELECT id, doc_id, source, chunk
+            FROM document_chunks
+            WHERE tenant_id = :tenant_id
+            ORDER BY embedding <-> :query_vec
+            LIMIT :limit
+            """
+        )
+        rows = (
+            self.db.execute(
+                stmt,
+                {"tenant_id": tenant_id, "query_vec": query_vec, "limit": self.k},
             )
-
-        embeddings = VertexAIEmbeddings(
-            model_name=self._embedding_model, project=self._gcp_project
+            .mappings()
+            .all()
         )
-
-        self._vector_store = PGVector(
-            embeddings=embeddings,
-            collection_name=self.collection_name,
-            connection=self._connection_string,
-        )
-
-        self.retriever = self._vector_store.as_retriever(
-            search_type=self.search_type, search_kwargs={"k": self.k}
-        )
+        return [dict(r) for r in rows]

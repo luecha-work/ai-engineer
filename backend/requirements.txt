@@ -13,6 +13,5 @@ langchain
 langchain-community
 langchain-core
 langchain-text-splitters
-langchain_google_vertexai
 langchain-postgres
 langchain_redis

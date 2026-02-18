@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List
 from langchain_core.documents import Document
-from langchain_google_vertexai import VertexAIEmbeddings
 
 class BaseKnowledgeIngestor(ABC):
 

@@ -11,8 +11,8 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = 300
 
     ollama_url: str = "http://ollama:11434"
-    ollama_model: str = "llama3:8b"
-    ollama_embed_model: str = "nomic-embed-text"
+    ollama_model: str = "qwen3"
+    ollama_embed_model: str = "qwen3-embedding"
 
 
 settings = Settings()
