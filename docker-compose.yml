@@ -28,10 +28,10 @@ services:
       - ollama_data:/root/.ollama
     healthcheck:
       test: ["CMD", "sh", "-c", "test -f /tmp/ollama.ready"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-      start_period: 5s
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 5m
 
   backend:
     build:
