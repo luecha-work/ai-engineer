@@ -1,6 +1,8 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
+    env_file:
+      - .env.example
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -18,29 +20,34 @@ services:
   ollama:
     build:
       context: ./infra/ollama
+    env_file:
+      - .env.example
     ports:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "sh", "-c", "test -f /tmp/ollama.ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
 
   backend:
     build:
       context: .
       dockerfile: Dockerfile
-    environment:
-      DATABASE_URL: postgresql+psycopg2://postgres:postgres@postgres:5432/ai_assistant
-      REDIS_URL: redis://redis:6379/0
-      EMBEDDING_DIM: 768
-      CACHE_TTL_SECONDS: 300
-      OLLAMA_URL: http://ollama:11434
-      OLLAMA_MODEL: qwen3
-      OLLAMA_EMBED_MODEL: qwen3-embedding
+    env_file:
+      - .env.example
     ports:
       - "8000:8000"
     depends_on:
-      - postgres
-      - redis
-      - ollama
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      ollama:
+        condition: service_healthy
 
 volumes:
   pgdata:
