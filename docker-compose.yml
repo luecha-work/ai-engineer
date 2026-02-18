@@ -16,17 +16,12 @@ services:
       - "6379:6379"
 
   ollama:
-    image: ollama/ollama:0.1.48
+    build:
+      context: ./infra/ollama
     ports:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-    command:
-      [
-        "/bin/sh",
-        "-lc",
-        "ollama serve & sleep 2 && ollama pull nomic-embed-text && ollama pull llama3:8b && wait",
-      ]
 
   backend:
     build:
