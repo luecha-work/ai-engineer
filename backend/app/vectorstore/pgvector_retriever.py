@@ -1,36 +1,33 @@
-from typing import List, Dict
-from sqlalchemy import text
-from sqlalchemy.orm import Session
+import os
+from dotenv import load_dotenv
+from langchain_google_vertexai import VertexAIEmbeddings
+from langchain_postgres import PGVector
 
+from app.config.settings import GCP_PROJECT_ID, PGVECTOR_CONNECTION_STRING
 from app.vectorstore.base_vector_retriever import BaseVectorRetriever
-from app.utils.ollama_client import embed_text
 
 
 class PGVectorRetriever(BaseVectorRetriever):
-    def __init__(self, db: Session, k: int = 5):
-        self.db = db
-        super().__init__(k=k)
-
     def _initialize(self):
-        return None
+        self._gcp_project = GCP_PROJECT_ID
+        self._connection_string = PGVECTOR_CONNECTION_STRING
+        self._embedding_model = "text-embedding-004"
 
-    def search(self, tenant_id: str, query: str) -> List[Dict]:
-        query_vec = embed_text(query)
-        stmt = text(
-            """
-            SELECT id, doc_id, source, chunk
-            FROM document_chunks
-            WHERE tenant_id = :tenant_id
-            ORDER BY embedding <-> :query_vec
-            LIMIT :limit
-            """
-        )
-        rows = (
-            self.db.execute(
-                stmt,
-                {"tenant_id": tenant_id, "query_vec": query_vec, "limit": self.k},
+        if not all([self._gcp_project, self._connection_string]):
+            raise ValueError(
+                "Please set GCP_PROJECT_ID and PGVECTOR_CONNECTION_STRING."
             )
-            .mappings()
-            .all()
+
+        embeddings = VertexAIEmbeddings(
+            model_name=self._embedding_model, project=self._gcp_project
         )
-        return [dict(r) for r in rows]
+
+        self._vector_store = PGVector(
+            embeddings=embeddings,
+            collection_name=self.collection_name,
+            connection=self._connection_string,
+        )
+
+        self.retriever = self._vector_store.as_retriever(
+            search_type=self.search_type, search_kwargs={"k": self.k}
+        )

@@ -8,3 +8,11 @@ redis==5.0.6
 python-multipart==0.0.9
 pgvector==0.2.5
 requests==2.32.3
+redis
+langchain
+langchain-community
+langchain-core
+langchain-text-splitters
+langchain_google_vertexai
+langchain-postgres
+langchain_redis

@@ -1,44 +1,48 @@
-from typing import List
-from sqlalchemy.orm import Session
+import os
+from dotenv import load_dotenv
+
+from langchain_community.document_loaders import PyMuPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_google_vertexai import VertexAIEmbeddings
+from langchain_postgres import PGVector
+
+from app.config.settings import GCP_PROJECT_ID, PGVECTOR_CONNECTION_STRING
 
 from app.vectorstore.base_ingestor import BaseKnowledgeIngestor
-from app.models import Document, DocumentChunk
-from app.utils.ollama_client import embed_text
-from app.utils.text_splitter import split_text
+from app.utils.find_knowledge_base_path import find_knowledge_base
 
 
 class PGVectorIngestor(BaseKnowledgeIngestor):
-    def __init__(self, db: Session):
-        self.db = db
-
-    def load_documents(self, file_path: str) -> List[str]:
-        with open(file_path, "r", encoding="utf-8") as f:
-            return [f.read()]
-
-    def split_documents(self, documents: List[str]) -> List[str]:
-        chunks: List[str] = []
-        for doc in documents:
-            chunks.extend(split_text(doc))
-        return chunks
-
-    def embed_and_store(self, documents: List[str], tenant_id: str, source: str, doc_id: int | None = None):
-        if doc_id is None:
-            doc_row = Document(tenant_id=tenant_id, source=source, content="\\n".join(documents))
-            self.db.add(doc_row)
-            self.db.commit()
-            self.db.refresh(doc_row)
-            doc_id = doc_row.id
-
-        for chunk in documents:
-            row = DocumentChunk(
-                tenant_id=tenant_id,
-                doc_id=doc_id,
-                source=source,
-                chunk=chunk,
-                embedding=embed_text(chunk),
+    def __init__(self):
+        self._gcp_project = GCP_PROJECT_ID
+        self._connection_string = PGVECTOR_CONNECTION_STRING
+        self._embedding_model = "text-embedding-004"
+        
+        if not self._gcp_project or not self._connection_string:
+            raise ValueError(
+                "GCP_PROJECT_ID and PGVECTOR_CONNECTION_STRING must be set in .env"
             )
-            self.db.add(row)
-        self.db.commit()
+
+        self.embeddings = VertexAIEmbeddings(
+            model_name=self._embedding_model, project=self._gcp_project
+        )
+
+    def load_documents(self, file_path: str):
+        loader = PyMuPDFLoader(file_path)
+        return loader.load()
+
+    def split_documents(self, documents):
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        return splitter.split_documents(documents)
+
+    def embed_and_store(self, documents, collection_name: str):
+        PGVector.from_documents(
+            documents=documents,
+            embedding=self.embeddings,
+            collection_name=collection_name,
+            connection=self._connection_string,
+            pre_delete_collection=False,
+        )
 
 # if __name__ == "__main__":
 #     print("🚀 Starting Process: Ingest Knowledge Base to PGVector")
